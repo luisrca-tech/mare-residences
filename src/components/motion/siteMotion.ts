@@ -237,27 +237,39 @@ export function createSiteMotion({
       const target = node?.querySelector<HTMLElement>(
         '[data-motion-part="heading"]',
       );
+      const photo = node?.querySelector<HTMLElement>(
+        '[data-motion-part="image"]',
+      );
+      const titleBox = target?.getBoundingClientRect();
+      const photoBox = photo?.getBoundingClientRect();
+      const pairedTop =
+        node?.dataset.motionNarrative === "visible" &&
+        titleBox &&
+        photoBox &&
+        titleBox.bottom > 0 &&
+        titleBox.top < innerHeight &&
+        photoBox.bottom > 0 &&
+        photoBox.top < innerHeight
+          ? Math.min(titleBox.top, photoBox.top)
+          : null;
       if (
         active.prepared &&
         !active.resumed &&
         node &&
         target &&
         surface.getBoundingClientRect().bottom <=
-          target.getBoundingClientRect().top
+          (pairedTop ?? target.getBoundingClientRect().top)
       ) {
         active.resumed = true;
         runtime.resume(node, "text");
       }
-      const photo = node?.querySelector<HTMLElement>(
-        '[data-motion-part="image"]',
-      );
       if (
         active.prepared &&
         !active.photoResumed &&
         node &&
         photo &&
         surface.getBoundingClientRect().bottom <=
-          photo.getBoundingClientRect().top
+          (pairedTop ?? photo.getBoundingClientRect().top)
       ) {
         active.photoResumed = true;
         runtime.resume(node, "image");

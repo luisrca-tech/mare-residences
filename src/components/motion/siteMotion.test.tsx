@@ -207,6 +207,48 @@ async function flush() {
 }
 
 describe("V4 covered Hero curtain and deliberate entry", () => {
+  it("hands off a grouped in-view Hero title and photo together after both are uncovered", () => {
+    const node = document.querySelector<HTMLElement>(
+      '[data-motion-scene="home-hero"]',
+    );
+    if (!node) throw new Error("Missing Hero");
+    node.dataset.motionNarrative = "visible";
+    const photo = document.createElement("div");
+    photo.dataset.motionPart = "image";
+    node.append(photo);
+    const title = node.querySelector<HTMLElement>(
+      '[data-motion-part="heading"]',
+    );
+    if (!title) throw new Error("Missing title");
+    Object.defineProperty(title, "getBoundingClientRect", {
+      value: () => ({
+        top: 400,
+        bottom: 500,
+        left: 0,
+        right: 500,
+        width: 500,
+        height: 100,
+      }),
+    });
+    Object.defineProperty(photo, "getBoundingClientRect", {
+      value: () => ({
+        top: 100,
+        bottom: 600,
+        left: 0,
+        right: 500,
+        width: 500,
+        height: 500,
+      }),
+    });
+    start();
+    bottom = 200;
+    for (const callback of [...frames]) callback(1800);
+    expect(runtime.resume).not.toHaveBeenCalled();
+    bottom = 90;
+    for (const callback of [...frames]) callback(1900);
+    expect(runtime.resume).toHaveBeenCalledWith(node, "text");
+    expect(runtime.resume).toHaveBeenCalledWith(node, "image");
+  });
   function photo(cold: boolean) {
     const node = document.querySelector<HTMLElement>(
       '[data-motion-scene="home-hero"]',

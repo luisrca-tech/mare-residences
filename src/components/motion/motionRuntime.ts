@@ -196,6 +196,8 @@ export function installMotion(
       let photoSettled = !photo;
       let retryCaption = () => {};
       const fullStory = scene.dataset.motionNarrative === "visible";
+      const timing = fullStory ? { ...pacing, ...pacing.grouped } : pacing;
+      const beat = pacing.grouped.beat;
       const textNodes = [
         ...scene.querySelectorAll<HTMLElement>(
           fullStory
@@ -310,9 +312,10 @@ export function installMotion(
             settle(group);
             return;
           }
-          if (active.size >= 2) {
-            const oldest = active.values().next().value;
-            if (oldest) settle(oldest);
+          const activeScenes = new Set([...active].map((item) => item.scene));
+          if (!activeScenes.has(scene) && activeScenes.size >= 2) {
+            const oldest = active.values().next().value?.scene;
+            for (const item of active) if (item.scene === oldest) settle(item);
           }
           group.state = "running";
           target.dataset.motionState = "running";
@@ -335,7 +338,7 @@ export function installMotion(
           };
           if (image) {
             photoDelay =
-              hero || storyStartedAt === null
+              fullStory || hero || storyStartedAt === null
                 ? 0
                 : Math.max(
                     0,
@@ -352,7 +355,7 @@ export function installMotion(
                   { clipPath: "inset(0 100% 0 0)" },
                   { clipPath: "inset(0 0% 0 0)" },
                 ],
-                pacing.photo,
+                timing.photo,
                 photoDelay,
                 pacing.curtainEase,
               );
@@ -435,8 +438,16 @@ export function installMotion(
             return;
           entry.started = true;
           seen.add(entry.key);
-          const offset =
-            role === "body"
+          const offset = fullStory
+            ? role === "body"
+              ? beat
+              : role === "list"
+                ? beat * 2
+                : role === "action"
+                  ? beat *
+                    (entries.some((item) => item.role === "list") ? 3 : 2)
+                  : 0
+            : role === "body"
               ? bodyBeat
               : role === "list"
                 ? bodyBeat + pacing.body
@@ -457,12 +468,12 @@ export function installMotion(
                     : 0;
           const duration =
             role === "heading"
-              ? pacing.heading
+              ? timing.heading
               : role === "label"
-                ? pacing.label
+                ? timing.label
                 : role === "action"
-                  ? pacing.action
-                  : pacing.body;
+                  ? timing.action
+                  : timing.body;
           let begin = Math.max(now, (storyStartedAt ?? now) + offset);
           for (const previous of entries) {
             if (previous.at === null || previous === entry) continue;
@@ -470,9 +481,11 @@ export function installMotion(
               begin = Math.max(
                 begin,
                 previous.at +
-                  pacing.heading +
-                  (previous.surfaces.length - 1) * pacing.lineStagger +
-                  pacing.readingGap,
+                  (fullStory
+                    ? beat
+                    : pacing.heading +
+                      (previous.surfaces.length - 1) * pacing.lineStagger +
+                      pacing.readingGap),
               );
             if (
               (role === "list" || role === "action") &&
@@ -481,17 +494,20 @@ export function installMotion(
               begin = Math.max(
                 begin,
                 previous.at +
-                  pacing.body +
-                  (role === "action" ? pacing.readingGap : 0),
+                  (fullStory
+                    ? beat
+                    : pacing.body +
+                      (role === "action" ? pacing.readingGap : 0)),
               );
             if (role === "action" && previous.role === "list")
               begin = Math.max(
                 begin,
-                previous.at + pacing.body + pacing.readingGap,
+                previous.at +
+                  (fullStory ? beat : pacing.body + pacing.readingGap),
               );
           }
           if (role === "caption" && !photoSettled && photoStartedAt !== null)
-            begin = Math.max(begin, photoStartedAt + pacing.photo);
+            begin = Math.max(begin, photoStartedAt + timing.photo);
           entry.at = begin;
           const distance =
             role === "label"
@@ -517,7 +533,7 @@ export function installMotion(
                     ],
                 {
                   duration,
-                  delay: Math.max(0, begin - now) + index * pacing.lineStagger,
+                  delay: Math.max(0, begin - now) + index * timing.lineStagger,
                   easing: pacing.textEase,
                   fill: "both",
                 },

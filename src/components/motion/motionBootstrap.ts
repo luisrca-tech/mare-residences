@@ -16,6 +16,16 @@ export const MOTION_PACING = {
   bodyBeat: 1220,
   photo: 1300,
   photoBeat: 2120,
+  // Adapted narrative scenes overlap their starts; other consumers retain their clocks.
+  grouped: {
+    heading: 800,
+    lineStagger: 80,
+    label: 350,
+    body: 650,
+    action: 600,
+    photo: 1000,
+    beat: 120,
+  },
   transition: 1000,
   textEase: "cubic-bezier(0.33, 0.05, 0.2, 1)",
   curtainEase: "cubic-bezier(0.65, 0, 0.35, 1)",

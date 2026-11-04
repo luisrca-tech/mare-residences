@@ -58,7 +58,7 @@ async function flush() {
 
 it.each([
   1, 2, 3,
-])("uses one configurable reading gap after a %i-line title", async (lineCount) => {
+])("keeps the legacy configurable reading gap after a %i-line title", async (lineCount) => {
   runtime.destroy();
   const readingGap = 340;
   runtime = installMotion({
@@ -90,6 +90,7 @@ it.each([
   });
   try {
     const node = story();
+    delete node.dataset.motionNarrative;
     part(node, "h2").textContent = "One Two Six";
     runtime.scan(node, false);
     base = 100;
@@ -119,13 +120,7 @@ it.each([
   }
 });
 
-it("uses the same configurable gap after a list arriving later than its body", () => {
-  runtime.destroy();
-  const readingGap = 340;
-  runtime = installMotion({
-    ...MOTION_PACING,
-    readingGap,
-  } as unknown as typeof MOTION_PACING);
+it("overlaps the action a short beat after a list arriving later than its body", () => {
   const node = story();
   const list = part(node, "ul");
   const action = part(node, "a");
@@ -151,8 +146,9 @@ it("uses the same configurable gap after a list arriving later than its body", (
   const listEntry = animations.find((a) => a.node === list);
   const actionEntry = animations.find((a) => a.node === action);
   expect(listEntry?.options.delay).toBe(0);
-  expect(Number(actionEntry?.options.delay)).toBe(
-    Number(listEntry?.options.duration) + readingGap,
+  expect(Number(actionEntry?.options.delay)).toBe(MOTION_PACING.grouped.beat);
+  expect(Number(actionEntry?.options.delay)).toBeLessThan(
+    Number(listEntry?.options.duration),
   );
 });
 
@@ -198,6 +194,95 @@ function mediaStory(decode = () => Promise.resolve()) {
   };
 }
 
+it.each(
+  [1, 3].flatMap((lines) =>
+    ["text-first", "image-first"].map((order) => ({ lines, order })),
+  ),
+)("overlaps grouped title/media/support/action with $lines lines in $order order", async ({
+  lines: lineCount,
+  order,
+}) => {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    Range.prototype,
+    "getBoundingClientRect",
+  );
+  Object.defineProperty(Range.prototype, "getBoundingClientRect", {
+    configurable: true,
+    value(this: Range) {
+      const bounds = this.startContainer.parentElement?.getBoundingClientRect();
+      if (!bounds) throw new Error("Missing measured source");
+      const top =
+        bounds.top +
+        Math.min(lineCount - 1, Math.floor(this.startOffset / 4)) * 32;
+      return {
+        top,
+        bottom: top + 24,
+        left: 0,
+        right: 100,
+        width: 100,
+        height: 24,
+      };
+    },
+  });
+  try {
+    const { node, photo, caption, place } = mediaStory();
+    part(node, "ul").remove();
+    part(node, "h2").textContent = "One Two Six";
+    runtime.scan(node, false);
+    await flush();
+    expect(animations).toHaveLength(0);
+    base = 100;
+    place(100, 550);
+    if (order === "image-first") cross(photo);
+    cross(part(node, "h2"));
+    if (order === "text-first") cross(photo);
+    const titles = animations.filter((a) =>
+      a.node.hasAttribute("data-motion-line"),
+    );
+    const media = animations.find((a) => a.node === photo);
+    const body = animations.find((a) => a.node.dataset.motionPart === "body");
+    const action = animations.find((a) => a.node.tagName === "A");
+    const text = animations.find((a) => a.node === caption);
+    expect(titles).toHaveLength(lineCount);
+    expect(media && body && action && text).toBeTruthy();
+    const titleStart = Number(titles[0].options.delay);
+    expect(
+      Math.abs(Number(media?.options.delay) - titleStart),
+    ).toBeLessThanOrEqual(120);
+    expect(Number(body?.options.delay) - titleStart).toBeGreaterThanOrEqual(
+      100,
+    );
+    expect(Number(body?.options.delay) - titleStart).toBeLessThanOrEqual(160);
+    expect(
+      Number(action?.options.delay) - Number(body?.options.delay),
+    ).toBeGreaterThanOrEqual(100);
+    expect(
+      Number(action?.options.delay) - Number(body?.options.delay),
+    ).toBeLessThanOrEqual(160);
+    expect(Number(body?.options.delay)).toBeLessThan(
+      titleStart + Number(titles[0].options.duration),
+    );
+    expect(Number(action?.options.delay)).toBeLessThan(
+      Number(body?.options.delay) + Number(body?.options.duration),
+    );
+    expect(Number(text?.options.delay)).toBeGreaterThanOrEqual(
+      Number(media?.options.delay) + Number(media?.options.duration),
+    );
+    for (const animation of animations) animation.finish();
+    await flush();
+    expect(node.querySelector("[data-motion-lines]")).toBeNull();
+    expect(caption.style.opacity).toBe("");
+  } finally {
+    if (descriptor)
+      Object.defineProperty(
+        Range.prototype,
+        "getBoundingClientRect",
+        descriptor,
+      );
+    else Reflect.deleteProperty(Range.prototype, "getBoundingClientRect");
+  }
+});
+
 it.each([
   "text-first",
   "image-first",
@@ -224,6 +309,64 @@ it.each([
   expect(Number(text?.options.delay)).toBe(
     Number(media?.options.delay) + Number(media?.options.duration),
   );
+});
+
+it("keeps an offscreen mobile photo unspent while eligible reading groups overlap", async () => {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: 425,
+  });
+  Object.defineProperty(window, "innerHeight", {
+    configurable: true,
+    value: 844,
+  });
+  const { node, photo, caption, place } = mediaStory();
+  runtime.scan(node, false);
+  await flush();
+  base = 100;
+  cross(part(node, "h2"));
+  const body = animations.find((a) => a.node.dataset.motionPart === "body");
+  const action = animations.find((a) => a.node.tagName === "A");
+  expect(Number(action?.options.delay)).toBeLessThan(
+    Number(body?.options.delay) + Number(body?.options.duration),
+  );
+  expect(animations.some((a) => a.node === photo)).toBe(false);
+  expect(caption.style.opacity).toBe("0");
+  clock = 8000;
+  place(100, 550);
+  cross(photo);
+  cross(caption);
+  const media = animations.find((a) => a.node === photo);
+  const text = animations.find((a) => a.node === caption);
+  expect(media?.options.delay).toBe(0);
+  expect(Number(text?.options.delay)).toBeGreaterThanOrEqual(
+    Number(media?.options.duration),
+  );
+});
+
+it("keeps title and photo alive in two adjacent grouped stories and retires the oldest whole story on a third", async () => {
+  const one = mediaStory();
+  const two = mediaStory();
+  two.node.dataset.motionScene = "two";
+  const third = story("three");
+  runtime.scan(document, false);
+  await flush();
+  base = 100;
+  secondBase = 100;
+  for (const item of [one, two]) {
+    item.place(100, 550);
+    cross(part(item.node, "h2"));
+    cross(item.photo);
+  }
+  const first = animations.filter((a) => one.node.contains(a.node));
+  const second = animations.filter((a) => two.node.contains(a.node));
+  expect(first.length).toBeGreaterThan(0);
+  expect(second.length).toBeGreaterThan(0);
+  expect(first.every((a) => a.cancel.mock.calls.length === 0)).toBe(true);
+  expect(second.every((a) => a.cancel.mock.calls.length === 0)).toBe(true);
+  cross(part(third, "h2"));
+  expect(first.every((a) => a.cancel.mock.calls.length === 1)).toBe(true);
+  expect(second.every((a) => a.cancel.mock.calls.length === 0)).toBe(true);
 });
 
 it("does not spend a paused photograph clock before its real handoff", async () => {
@@ -890,11 +1033,14 @@ it("measures line masks after fonts and staggers the title before its explanatio
     expect(lines).toHaveLength(2);
     expect(
       Number(lines[1].options.delay) - Number(lines[0].options.delay),
-    ).toBe(150);
+    ).toBe(80);
     const body = animations.find((a) => a.node.dataset.motionPart === "body");
     if (!body) throw new Error("Missing body entrance");
     expect(Number(body.options.delay)).toBeGreaterThan(
-      Number(lines[1].options.delay) + Number(lines[1].options.duration),
+      Number(lines[0].options.delay),
+    );
+    expect(Number(body.options.delay)).toBeLessThan(
+      Number(lines[0].options.delay) + Number(lines[0].options.duration),
     );
     const action = animations.find((a) => a.node.tagName === "A");
     if (!action) throw new Error("Missing action entrance");
@@ -1124,8 +1270,9 @@ it("moves the action beat after a late explanation instead of revealing both tog
   const bodyEntry = animations.find((item) => item.node === body);
   const actionEntry = animations.find((item) => item.node === action);
   if (!bodyEntry || !actionEntry) throw new Error("Missing late reading beats");
-  expect(Number(actionEntry.options.delay)).toBeGreaterThanOrEqual(
-    Number(bodyEntry.options.duration) + MOTION_PACING.readingGap,
+  expect(Number(actionEntry.options.delay)).toBe(MOTION_PACING.grouped.beat);
+  expect(Number(actionEntry.options.delay)).toBeLessThan(
+    Number(bodyEntry.options.duration),
   );
 });
 
