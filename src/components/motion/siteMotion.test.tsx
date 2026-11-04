@@ -143,6 +143,7 @@ beforeEach(() => {
     destroy: vi.fn(),
     resume: vi.fn(),
     settle: vi.fn(),
+    settleVisible: vi.fn(),
   } as unknown as ReturnType<typeof installMotion>;
   navigate = vi.fn();
   syncScroll = vi.fn();
@@ -412,7 +413,7 @@ describe("Home introduction owner", () => {
     start();
     expect(
       animated.find((item) => item.target.id === "mare-intro")?.options,
-    ).toMatchObject({ duration: 1800, delay: 1000 });
+    ).toMatchObject({ duration: 1700, delay: 900 });
     expect(runtime.scan).toHaveBeenCalledWith(
       document.querySelector('[data-motion-scene="home-hero"]'),
       true,
@@ -439,7 +440,7 @@ describe("Home introduction owner", () => {
     start();
     expect(
       animated.find((item) => item.target.id === "mare-intro")?.options,
-    ).toMatchObject({ duration: 1800, delay: 1000 });
+    ).toMatchObject({ duration: 1700, delay: 900 });
   });
   it("settles instead of adding an introduction after the parser deadline", () => {
     vi.advanceTimersByTime(7000);
@@ -455,7 +456,7 @@ describe("Home introduction owner", () => {
     expect(
       document.getElementById("mare-intro")?.hasAttribute("data-active"),
     ).toBe(false);
-    expect(runtime.settle).toHaveBeenCalled();
+    expect(runtime.settleVisible).toHaveBeenCalled();
   });
   it.each([
     "keydown",
@@ -591,7 +592,7 @@ describe("destination transition owner", () => {
     });
     start(false);
     click("/bairro");
-    expect(runtime.settle).toHaveBeenCalled();
+    expect(runtime.settleVisible).toHaveBeenCalled();
     expect(document.documentElement.hasAttribute("data-mare-transition")).toBe(
       false,
     );
@@ -648,7 +649,7 @@ describe("integration failure and focus boundaries", () => {
     expect(document.documentElement.hasAttribute("data-mare-transition")).toBe(
       false,
     );
-    expect(runtime.settle).toHaveBeenCalled();
+    expect(runtime.settleVisible).toHaveBeenCalled();
   });
   it("keeps readable SSR if animation support is unavailable", () => {
     const surface = document.getElementById("mare-intro");

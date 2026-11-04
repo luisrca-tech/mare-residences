@@ -86,7 +86,7 @@ export function createSiteMotion({
     navigation.animation?.cancel();
     navigation.view?.skipTransition();
     document.documentElement.removeAttribute("data-mare-transition");
-    if (settle) runtime.settle();
+    if (settle) runtime.settleVisible();
   };
   const commitNavigation = (navigation: Navigation) => {
     if (pending !== navigation || navigation.committed || disposed) return;
@@ -175,7 +175,7 @@ export function createSiteMotion({
       () => {
         if (intro === active) {
           finishIntro(true);
-          runtime.settle();
+          runtime.settleVisible();
         }
       },
       Math.max(0, MOTION_PACING.deadline - elapsed),
@@ -426,7 +426,7 @@ export function createSiteMotion({
   };
   const resize = () => {
     interrupt();
-    runtime.settle();
+    runtime.settleVisible();
   };
   const focus = (event: FocusEvent) => {
     if (intro || pending) interrupt();

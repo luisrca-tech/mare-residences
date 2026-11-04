@@ -127,8 +127,8 @@ describe("Maré motion lifecycle", () => {
     expect(animations).toHaveLength(0);
     cross(node.querySelector("p"));
     expect(animations).toHaveLength(3);
-    expect(animations[0].options.duration).toBe(1200);
-    expect(animations[2].options.delay).toBe(1400);
+    expect(animations[0].options.duration).toBe(1080);
+    expect(animations[2].options.delay).toBeCloseTo(1220, 6);
     top = -400;
     window.dispatchEvent(new Event("scroll"));
     expect(animations.every((a) => a.cancel.mock.calls.length === 1)).toBe(
@@ -158,8 +158,8 @@ describe("Maré motion lifecycle", () => {
       opacity: 0,
       transform: "translateY(12px)",
     });
-    expect(animations[0].options.duration).toBe(1200);
-    expect(animations[2].options.delay).toBe(1400);
+    expect(animations[0].options.duration).toBe(1080);
+    expect(animations[2].options.delay).toBeCloseTo(1220, 6);
     expect(
       vi.mocked(HTMLElement.prototype.animate).mock.contexts,
     ).not.toContain(node.querySelector("a"));
@@ -189,9 +189,9 @@ describe("Maré motion lifecycle", () => {
       configurable: true,
     });
     runtime.scan(scene("short", "hero"), true);
-    expect(animations[0].options.duration).toBe(1200);
+    expect(animations[0].options.duration).toBe(1080);
     expect(animations[0].frames[0].transform).toBe("translateY(6px)");
-    expect(animations[2].options.delay).toBe(1400);
+    expect(animations[2].options.delay).toBeCloseTo(1220, 6);
   });
 
   it("settles on focus, resize and live reduced motion and does not replay", () => {
@@ -268,7 +268,7 @@ describe("Maré motion lifecycle", () => {
       { clipPath: "inset(0 100% 0 0)" },
       { clipPath: "inset(0 0% 0 0)" },
     ]);
-    expect(animations[0].options.duration).toBe(1400);
+    expect(animations[0].options.duration).toBe(1300);
     expect(vi.mocked(HTMLElement.prototype.animate).mock.contexts).toEqual([
       slot,
     ]);
@@ -531,7 +531,7 @@ describe("v3 root handoff", () => {
   it("uses one fallback opening profile rather than double-animating a heading", () => {
     top = 100;
     runtime.scan(scene("fallback-home", "hero"), true, { fallback: true });
-    expect(animations[0].options.duration).toBe(1200);
+    expect(animations[0].options.duration).toBe(1080);
     expect(animations[0].frames[0]).toEqual({
       opacity: 0,
       transform: "translateY(12px)",
@@ -581,8 +581,8 @@ it.each([
   clock.mockReturnValue(arrival);
   callbacks.get(slot)?.([{ target: slot, isIntersecting: true }]);
   expect(animations).toHaveLength(4);
-  expect(animations[3].options.delay).toBe(Math.max(0, 2410 - arrival));
-  if (arrival < 2410)
+  expect(animations[3].options.delay).toBe(Math.max(0, 2130 - arrival));
+  if (arrival < 2130)
     expect(arrival + Number(animations[3].options.delay)).toBe(
       10 +
         Number(animations[2].options.delay) +

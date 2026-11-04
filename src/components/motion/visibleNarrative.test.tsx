@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { installMotion } from "./motionRuntime";
 import { bootstrapMotion } from "./motionBootstrap";
+import { MOTION_PACING } from "./motionBootstrap";
 import { createSiteMotion } from "./siteMotion";
 
 let runtime: ReturnType<typeof installMotion>;
@@ -54,6 +55,106 @@ function cross(element: Element) {
 async function flush() {
   for (let i = 0; i < 8; i++) await Promise.resolve();
 }
+
+it.each([
+  1, 2, 3,
+])("uses one configurable reading gap after a %i-line title", async (lineCount) => {
+  runtime.destroy();
+  const readingGap = 340;
+  runtime = installMotion({
+    ...MOTION_PACING,
+    readingGap,
+    bodyBeat: 0,
+  } as unknown as typeof MOTION_PACING);
+  const descriptor = Object.getOwnPropertyDescriptor(
+    Range.prototype,
+    "getBoundingClientRect",
+  );
+  Object.defineProperty(Range.prototype, "getBoundingClientRect", {
+    configurable: true,
+    value(this: Range) {
+      const bounds = this.startContainer.parentElement?.getBoundingClientRect();
+      if (!bounds) throw new Error("Missing measured source");
+      const top =
+        bounds.top +
+        Math.min(lineCount - 1, Math.floor(this.startOffset / 4)) * 32;
+      return {
+        top,
+        bottom: top + 24,
+        left: 0,
+        right: 100,
+        width: 100,
+        height: 24,
+      };
+    },
+  });
+  try {
+    const node = story();
+    part(node, "h2").textContent = "One Two Six";
+    runtime.scan(node, false);
+    base = 100;
+    cross(part(node, "h2"));
+    const lines = animations.filter((a) =>
+      a.node.hasAttribute("data-motion-line"),
+    );
+    expect(lines).toHaveLength(lineCount);
+    const body = animations.find((a) => a.node.dataset.motionPart === "body");
+    expect(Number(body?.options.delay)).toBe(
+      Number(lines.at(-1)?.options.delay) +
+        Number(lines.at(-1)?.options.duration) +
+        readingGap,
+    );
+    for (const a of animations) a.finish();
+    await flush();
+    expect(node.querySelector("[data-motion-lines]")).toBeNull();
+    expect(part(node, "h2").textContent).toBe("One Two Six");
+  } finally {
+    if (descriptor)
+      Object.defineProperty(
+        Range.prototype,
+        "getBoundingClientRect",
+        descriptor,
+      );
+    else Reflect.deleteProperty(Range.prototype, "getBoundingClientRect");
+  }
+});
+
+it("uses the same configurable gap after a list arriving later than its body", () => {
+  runtime.destroy();
+  const readingGap = 340;
+  runtime = installMotion({
+    ...MOTION_PACING,
+    readingGap,
+  } as unknown as typeof MOTION_PACING);
+  const node = story();
+  const list = part(node, "ul");
+  const action = part(node, "a");
+  let lowerTop = 1200;
+  for (const target of [list, action])
+    Object.defineProperty(target, "getBoundingClientRect", {
+      value: () => ({
+        top: lowerTop,
+        bottom: lowerTop + 60,
+        height: 60,
+        left: 0,
+        right: 400,
+        width: 400,
+      }),
+    });
+  runtime.scan(node, false);
+  base = 100;
+  cross(part(node, "h2"));
+  clock = 8000;
+  lowerTop = 300;
+  cross(list);
+  cross(action);
+  const listEntry = animations.find((a) => a.node === list);
+  const actionEntry = animations.find((a) => a.node === action);
+  expect(listEntry?.options.delay).toBe(0);
+  expect(Number(actionEntry?.options.delay)).toBe(
+    Number(listEntry?.options.duration) + readingGap,
+  );
+});
 
 function mediaStory(decode = () => Promise.resolve()) {
   const node = story();
@@ -467,6 +568,289 @@ it("does not settle future sections when the first section enters", () => {
   expect(animations.some((a) => two.contains(a.node))).toBe(false);
 });
 
+it.each([
+  "resize",
+  "hidden-visible",
+  "reduce-on-off",
+])("keeps the next unread story eligible after %s while preserving exposed copy", (event) => {
+  const one = story();
+  const two = story("two");
+  controller = createSiteMotion({
+    runtime,
+    navigate: vi.fn(),
+    syncScroll: vi.fn(),
+  });
+  base = 100;
+  cross(part(one, "h2"));
+  if (event === "resize") window.dispatchEvent(new Event("resize"));
+  else if (event === "hidden-visible") {
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: true,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: false,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  } else {
+    reduced = true;
+    for (const callback of preferences) callback();
+    expect(part(two, "p[data-motion-part='body']").style.opacity).toBe("");
+    reduced = false;
+    for (const callback of preferences) callback();
+  }
+  expect(part(one, "p[data-motion-part='body']").style.opacity).toBe("");
+  expect(part(two, "h2").dataset.motionState).toBe("pending");
+  expect(part(two, "p[data-motion-part='body']").style.opacity).toBe("0");
+  expect(animations.some((a) => two.contains(a.node))).toBe(false);
+  secondBase = 100;
+  cross(part(two, "h2"));
+  expect(animations.some((a) => two.contains(a.node))).toBe(true);
+});
+
+it.each([
+  "deadline",
+  "late-hydration",
+  "reload-warm",
+  "reload-cold",
+])("retains future section motion through Home %s without hiding exposed ink", async (entry) => {
+  base = 100;
+  const hero = story();
+  hero.dataset.motionScene = "home-hero";
+  hero.dataset.motionKind = "hero";
+  const next = story("two");
+  const panel = document.createElement("div");
+  panel.id = "mare-intro";
+  panel.innerHTML = "<span data-intro-wordmark>maré</span>";
+  document.body.prepend(panel);
+  if (entry.startsWith("reload")) {
+    vi.mocked(performance.getEntriesByType).mockImplementation((type) =>
+      type === "navigation"
+        ? [{ type: "reload" } as unknown as PerformanceEntry]
+        : [],
+    );
+    sessionStorage.setItem(
+      "mare-motion-position",
+      JSON.stringify({ pathname: "/", scrollY: 0 }),
+    );
+  }
+  if (entry === "reload-cold") fonts.status = "loading";
+  bootstrapMotion();
+  if (entry === "late-hydration") {
+    clock = 8000;
+    vi.advanceTimersByTime(8000);
+  }
+  controller = createSiteMotion({
+    runtime,
+    navigate: vi.fn(),
+    syncScroll: vi.fn(),
+  });
+  if (entry === "deadline") {
+    clock = 7000;
+    vi.advanceTimersByTime(7000);
+  } else if (entry.startsWith("reload")) {
+    fonts.status = "loaded";
+    ready();
+    await flush();
+    coverBottom = 0;
+    for (const callback of [...frames.values()]) callback(clock);
+    animations.find((a) => a.node === panel)?.finish();
+    await flush();
+  }
+  expect(part(next, "h2").dataset.motionState).toBe("pending");
+  expect(part(next, '[data-motion-part="body"]').style.opacity).toBe("0");
+  if (entry === "late-hydration" || entry === "deadline")
+    expect(part(hero, '[data-motion-part="body"]').style.opacity).toBe("");
+  secondBase = 100;
+  cross(part(next, "h2"));
+  expect(animations.some((a) => next.contains(a.node))).toBe(true);
+});
+
+it("allows unread content to enter after an initially reduced preference is disabled", () => {
+  reduced = true;
+  const node = story();
+  runtime.scan(node, false);
+  expect(part(node, '[data-motion-part="body"]').style.opacity).toBe("");
+  reduced = false;
+  for (const callback of preferences) callback();
+  expect(part(node, '[data-motion-part="body"]').style.opacity).toBe("0");
+  base = 100;
+  cross(part(node, "h2"));
+  expect(animations.length).toBeGreaterThan(0);
+});
+
+it.each([
+  { initiallyReduced: false, reverseBeforeToggle: false },
+  { initiallyReduced: true, reverseBeforeToggle: false },
+  { initiallyReduced: true, reverseBeforeToggle: true },
+])("preserves exposed CTA ink and recovers an unread body after reduced=$initiallyReduced, reverse=$reverseBeforeToggle", async ({
+  initiallyReduced,
+  reverseBeforeToggle,
+}) => {
+  history.replaceState({}, "", "/residencias");
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: 425,
+  });
+  Object.defineProperty(window, "innerHeight", {
+    configurable: true,
+    value: 844,
+  });
+  reduced = initiallyReduced;
+  base = 100;
+  const node = story("contact-cta");
+  part(node, "ul").remove();
+  part(node, "figcaption").remove();
+  const heading = part(node, "h2");
+  const body = part(node, '[data-motion-part="body"]');
+  const action = part(node, "a");
+  let lowerTop = 1000;
+  for (const target of [body, action])
+    Object.defineProperty(target, "getBoundingClientRect", {
+      value: () => ({
+        top: lowerTop,
+        bottom: lowerTop + 60,
+        height: 60,
+        left: 0,
+        right: 300,
+        width: 300,
+      }),
+    });
+  runtime.scan(node, false);
+  expect(heading.style.opacity).toBe("");
+  expect(body.style.opacity).toBe(initiallyReduced ? "" : "0");
+  expect(animations).toHaveLength(0);
+  if (reverseBeforeToggle) base = 1200;
+  reduced = false;
+  for (const callback of preferences) callback();
+  expect(heading.style.opacity).toBe("");
+  expect(heading.querySelector("[data-motion-lines]")).toBeNull();
+  expect(body.style.opacity).toBe("0");
+  expect(animations).toHaveLength(0);
+  clock = 8000;
+  lowerTop = 300;
+  cross(body);
+  const entrance = animations.find((a) => a.node === body);
+  expect(entrance).toBeDefined();
+  expect(entrance?.frames[0].opacity).toBe(0);
+  expect(animations.some((a) => a.node === heading)).toBe(false);
+  for (const animation of animations) animation.finish();
+  await flush();
+  expect(body.style.opacity).toBe("");
+  expect(heading.style.opacity).toBe("");
+});
+
+it("retains unread lower copy within a partially read story after resize", async () => {
+  const { node, photo, caption, place } = mediaStory();
+  runtime.scan(node, false);
+  await flush();
+  base = 100;
+  cross(part(node, "h2"));
+  const headingEntrances = animations.filter(
+    (a) => a.node === part(node, "h2"),
+  ).length;
+  window.dispatchEvent(new Event("resize"));
+  await flush();
+  expect(part(node, "h2").style.opacity).toBe("");
+  expect(caption.style.opacity).toBe("0");
+  base = 1200;
+  place(1400, 2000);
+  window.dispatchEvent(new Event("resize"));
+  await flush();
+  expect(part(node, "h2").style.opacity).toBe("");
+  expect(node.querySelector("[data-motion-lines]")).toBeNull();
+  base = 100;
+  clock = 8000;
+  place(100, 550);
+  cross(caption);
+  cross(photo);
+  expect(animations.filter((a) => a.node === part(node, "h2"))).toHaveLength(
+    headingEntrances,
+  );
+  expect(animations.some((a) => a.node === caption)).toBe(true);
+});
+
+it.each([
+  "text-first",
+  "image-first",
+])("preserves R7 and fresh photo geometry after unread resize in %s order", async (order) => {
+  const { node, photo, caption, place } = mediaStory();
+  runtime.scan(node, false);
+  await flush();
+  window.dispatchEvent(new Event("resize"));
+  await flush();
+  expect(photo.style.clipPath).toBe("inset(0 100% 0 0)");
+  base = 100;
+  cross(part(node, "h2"));
+  clock = 8000;
+  place(100, 550);
+  if (order === "text-first") cross(caption);
+  cross(photo);
+  if (order === "image-first") cross(caption);
+  const media = animations.find((a) => a.node === photo);
+  const text = animations.find((a) => a.node === caption);
+  expect(media).toBeDefined();
+  expect(text).toBeDefined();
+  expect(Number(text?.options.delay)).toBeGreaterThanOrEqual(
+    Number(media?.options.delay) + Number(media?.options.duration),
+  );
+});
+
+it("remeasures an unread heading after resize without re-hiding exposed heading ink", () => {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    Range.prototype,
+    "getBoundingClientRect",
+  );
+  let lineCount = 1;
+  Object.defineProperty(Range.prototype, "getBoundingClientRect", {
+    configurable: true,
+    value(this: Range) {
+      const bounds = this.startContainer.parentElement?.getBoundingClientRect();
+      if (!bounds) throw new Error("Missing source");
+      const top =
+        bounds.top +
+        Math.min(lineCount - 1, Math.floor(this.startOffset / 4)) * 32;
+      return {
+        top,
+        bottom: top + 24,
+        left: 0,
+        right: 100,
+        width: 100,
+        height: 24,
+      };
+    },
+  });
+  try {
+    const one = story();
+    const two = story("two");
+    part(two, "h2").textContent = "One Two Six";
+    runtime.scan(document, false);
+    base = 100;
+    cross(part(one, "h2"));
+    lineCount = 3;
+    window.dispatchEvent(new Event("resize"));
+    expect(one.querySelector("[data-motion-lines]")).toBeNull();
+    expect(two.querySelectorAll("[data-motion-line]")).toHaveLength(3);
+    secondBase = 100;
+    cross(part(two, "h2"));
+    expect(
+      animations.filter(
+        (a) => two.contains(a.node) && a.node.hasAttribute("data-motion-line"),
+      ),
+    ).toHaveLength(3);
+  } finally {
+    if (descriptor)
+      Object.defineProperty(
+        Range.prototype,
+        "getBoundingClientRect",
+        descriptor,
+      );
+    else Reflect.deleteProperty(Range.prototype, "getBoundingClientRect");
+  }
+});
+
 it("measures line masks after fonts and staggers the title before its explanation", async () => {
   const descriptor = Object.getOwnPropertyDescriptor(
     Range.prototype,
@@ -506,7 +890,7 @@ it("measures line masks after fonts and staggers the title before its explanatio
     expect(lines).toHaveLength(2);
     expect(
       Number(lines[1].options.delay) - Number(lines[0].options.delay),
-    ).toBe(180);
+    ).toBe(150);
     const body = animations.find((a) => a.node.dataset.motionPart === "body");
     if (!body) throw new Error("Missing body entrance");
     expect(Number(body.options.delay)).toBeGreaterThan(
@@ -600,7 +984,7 @@ it.each([
   "history",
   "skip",
   "release",
-])("restores all prepared source text on %s and ignores late font continuations", async (reason) => {
+])("preserves safe source state on %s through late font continuations", async (reason) => {
   fonts.status = "loading";
   const node = story();
   runtime.scan(node, false);
@@ -624,6 +1008,14 @@ it.each([
   fonts.status = "loaded";
   ready();
   await flush();
+  if (reason === "resize") {
+    expect(part(node, '[data-motion-part="body"]').style.opacity).toBe("0");
+    expect(animations).toHaveLength(0);
+    base = 100;
+    cross(part(node, "h2"));
+    expect(animations.length).toBeGreaterThan(0);
+    return;
+  }
   expect(
     node.querySelector<HTMLElement>('[data-motion-part="body"]')?.style.opacity,
   ).toBe("");
@@ -733,7 +1125,7 @@ it("moves the action beat after a late explanation instead of revealing both tog
   const actionEntry = animations.find((item) => item.node === action);
   if (!bodyEntry || !actionEntry) throw new Error("Missing late reading beats");
   expect(Number(actionEntry.options.delay)).toBeGreaterThanOrEqual(
-    Number(bodyEntry.options.duration) + 200,
+    Number(bodyEntry.options.duration) + MOTION_PACING.readingGap,
   );
 });
 

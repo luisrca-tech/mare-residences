@@ -11,6 +11,7 @@ type MotionApi = {
   scan(root: ParentNode, beforePaint: boolean, options?: SceneOptions): void;
   resume(root: ParentNode, part?: "text" | "image"): void;
   settle(root?: ParentNode): void;
+  settleVisible(): void;
   release(root: HTMLElement): void;
   destroy(): void;
 };
@@ -40,6 +41,7 @@ export function installMotion(
     clearText?: () => void;
     onSettle?: () => void;
     observer?: IntersectionObserver;
+    hasUnread?: () => boolean;
   };
   const groups = new Set<Group>();
   const active = new Set<Group>();
@@ -50,11 +52,11 @@ export function installMotion(
     );
   let path = location.pathname;
   const small = () => innerWidth < 1024 || innerHeight < 720;
-  const settle = (group: Group) => {
+  const settle = (group: Group, remember = true) => {
     if (group.state === "settled") return;
     group.state = "settled";
     group.target.dataset.motionState = "settled";
-    seen.add(group.key);
+    if (remember) seen.add(group.key);
     group.observer?.disconnect();
     for (const animation of group.animations) animation.cancel();
     group.restoreMask?.();
@@ -64,6 +66,9 @@ export function installMotion(
   };
   const settleAll = () => {
     for (const group of groups) settle(group);
+  };
+  const settleVisible = () => {
+    refresh();
   };
   const focus = (event: Event) => {
     for (const group of groups) {
@@ -118,12 +123,13 @@ export function installMotion(
     }
   };
   const visibility = () => {
-    if (document.hidden) settleAll();
+    if (document.hidden) settleVisible();
+    else refresh();
   };
   const reduce = () => {
-    if (preference.matches) settleAll();
+    refresh();
   };
-  window.addEventListener("resize", settleAll);
+  window.addEventListener("resize", refresh);
   window.addEventListener("pagehide", settleAll);
   window.addEventListener("pageshow", popPersisted);
   window.addEventListener("popstate", pop);
@@ -140,6 +146,20 @@ export function installMotion(
     for (const dispose of scenes.get(scene) ?? []) dispose();
     scenes.delete(scene);
   };
+  function refresh() {
+    // Rebuild only unread entrances after layout changes; exposed content stays final.
+    const unread = [...groups]
+      .filter(
+        (group) =>
+          (group.state === "pending" &&
+            group.target.getBoundingClientRect().top >= innerHeight) ||
+          group.hasUnread?.(),
+      )
+      .map((group) => group.key);
+    for (const scene of scenes.keys()) release(scene);
+    for (const key of unread) seen.delete(key);
+    if (!preference.matches) scan(document, false);
+  }
   const scan = (
     root: ParentNode,
     beforePaint: boolean,
@@ -351,8 +371,9 @@ export function installMotion(
         };
         const rect = target.getBoundingClientRect();
         const line = innerHeight * (small() ? 0.9 : 0.85);
-        const entries = textNodes.map((node) => ({
+        const entries = textNodes.map((node, index) => ({
           node,
+          key: key + ":" + index,
           role: node.dataset.motionPart ?? "action",
           surfaces: [node],
           mode: "fade" as "lines" | "fade",
@@ -362,6 +383,15 @@ export function installMotion(
           done: false,
           restore: () => {},
         }));
+        if (!image && fullStory)
+          group.hasUnread = () =>
+            group.state !== "settled" &&
+            entries.some(
+              (entry) =>
+                !entry.started &&
+                !entry.done &&
+                entry.node.getBoundingClientRect().top >= innerHeight,
+            );
         let fontTimer = 0;
         let bodyBeat: number = pacing.bodyBeat;
         const completeText = () => {
@@ -404,6 +434,7 @@ export function installMotion(
           )
             return;
           entry.started = true;
+          seen.add(entry.key);
           const offset =
             role === "body"
               ? bodyBeat
@@ -411,7 +442,7 @@ export function installMotion(
                 ? bodyBeat + pacing.body
                 : role === "caption"
                   ? hero
-                    ? pacing.photo + 200
+                    ? pacing.photo + pacing.readingGap
                     : evidenceBeat + pacing.photo
                   : role === "action"
                     ? Math.max(
@@ -420,7 +451,7 @@ export function installMotion(
                           (entries.some((item) => item.role === "list")
                             ? pacing.body
                             : 0) +
-                          200,
+                          pacing.readingGap,
                         photo && !hero ? evidenceBeat + pacing.photo : 0,
                       )
                     : 0;
@@ -441,7 +472,7 @@ export function installMotion(
                 previous.at +
                   pacing.heading +
                   (previous.surfaces.length - 1) * pacing.lineStagger +
-                  200,
+                  pacing.readingGap,
               );
             if (
               (role === "list" || role === "action") &&
@@ -449,10 +480,15 @@ export function installMotion(
             )
               begin = Math.max(
                 begin,
-                previous.at + pacing.body + (role === "action" ? 200 : 0),
+                previous.at +
+                  pacing.body +
+                  (role === "action" ? pacing.readingGap : 0),
               );
             if (role === "action" && previous.role === "list")
-              begin = Math.max(begin, previous.at + pacing.body + 200);
+              begin = Math.max(
+                begin,
+                previous.at + pacing.body + pacing.readingGap,
+              );
           }
           if (role === "caption" && !photoSettled && photoStartedAt !== null)
             begin = Math.max(begin, photoStartedAt + pacing.photo);
@@ -565,10 +601,11 @@ export function installMotion(
           for (const entry of entries) {
             const node = entry.node;
             if (
-              !beforePaint &&
-              node.getBoundingClientRect().top < innerHeight
+              seen.has(entry.key) ||
+              (!beforePaint && node.getBoundingClientRect().top < innerHeight)
             ) {
               entry.done = true;
+              seen.add(entry.key);
               continue;
             }
             const previous = node.style.getPropertyValue("opacity");
@@ -606,7 +643,9 @@ export function installMotion(
               }
               bodyBeat = Math.max(
                 pacing.bodyBeat,
-                pacing.heading + (lines - 1) * pacing.lineStagger + 200,
+                pacing.heading +
+                  (lines - 1) * pacing.lineStagger +
+                  pacing.readingGap,
               );
               evidenceBeat = bodyBeat + pacing.body;
               if (requested) start();
@@ -652,24 +691,50 @@ export function installMotion(
           restored ||
           location.hash ||
           seen.has(key) ||
-          rect.bottom <= 0 ||
+          (rect.bottom <= 0 &&
+            (image ||
+              !fullStory ||
+              group.end.getBoundingClientRect().bottom <= 0)) ||
           (image &&
             rect.top < innerHeight &&
             (!beforePaint || options.skipVisiblePhoto) &&
             !coveredPhoto)
         ) {
-          settle(group);
+          if (preference.matches && !image)
+            for (const entry of entries)
+              if (entry.node.getBoundingClientRect().top < innerHeight)
+                seen.add(entry.key);
+          settle(
+            group,
+            !(
+              preference.matches &&
+              (rect.top >= innerHeight || group.hasUnread?.())
+            ),
+          );
         } else if (coveredPhoto && rect.top < innerHeight) {
           // Close only behind the proven opaque cover; decode must finish before release.
           // A cold image that misses that handoff settles visibly instead of closing late.
           arm();
-        } else if (!image && rect.top < innerHeight && !beforePaint) {
+        } else if (
+          !image &&
+          !fullStory &&
+          rect.top < innerHeight &&
+          !beforePaint
+        ) {
           settle(group);
         } else if (!image) {
           if (typeof IntersectionObserver === "undefined") {
             settle(group);
           } else armText();
-          if (rect.top <= line) start();
+          if (entries.every((entry) => entry.done)) settle(group);
+          else if (
+            rect.top <= line &&
+            entries.some(
+              (entry) =>
+                !entry.done && entry.node.getBoundingClientRect().top < line,
+            )
+          )
+            start();
           else if (typeof IntersectionObserver === "undefined") settle(group);
         } else if (rect.top <= line) {
           if (!beforePaint) settle(group);
@@ -705,7 +770,7 @@ export function installMotion(
   };
   const destroy = () => {
     for (const scene of scenes.keys()) release(scene);
-    window.removeEventListener("resize", settleAll);
+    window.removeEventListener("resize", refresh);
     window.removeEventListener("pagehide", settleAll);
     window.removeEventListener("pageshow", popPersisted);
     window.removeEventListener("popstate", pop);
@@ -730,6 +795,13 @@ export function installMotion(
   const settleRoot = (root: ParentNode = document) => {
     for (const group of groups) if (root.contains(group.scene)) settle(group);
   };
-  host.__mareMotion = { scan, resume, settle: settleRoot, release, destroy };
+  host.__mareMotion = {
+    scan,
+    resume,
+    settle: settleRoot,
+    settleVisible,
+    release,
+    destroy,
+  };
   return host.__mareMotion;
 }
