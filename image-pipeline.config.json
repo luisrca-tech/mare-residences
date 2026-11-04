@@ -1,0 +1,15 @@
+{
+  "quality": 92,
+  "maxWidth": 2500,
+  "fit": "inside",
+  "allowUpscale": false,
+  "aliases": {
+    "home-hero": "home/living-room-table.webp",
+    "home-residences": "home/bedroom-lampshade-side.webp",
+    "home-neighborhood": "home/walkable-advantage.jpg",
+    "residences-hero": "residences/hero.webp",
+    "residences-essential": "residences/living-room-table.webp",
+    "residences-horizon": "residences/horizon.webp",
+    "neighborhood-hero": "neighborhood/walkable-advantage.jpg"
+  }
+}

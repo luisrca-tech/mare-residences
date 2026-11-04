@@ -1,0 +1,360 @@
+@import "tailwindcss";
+
+:root {
+  --layout-scale: 1;
+  --site-header-height: 84px;
+  --ivory: #f5f1e8;
+  --petrol: #153f42;
+  --paper: #fffcf6;
+  --sand: #e8decc;
+  --clay: #a04f36;
+  --muted: #526464;
+  --error: #a22d2d;
+  --error-surface: #fff0e9;
+}
+
+@theme inline {
+  --color-ivory: var(--ivory);
+  --color-petrol: var(--petrol);
+  --color-paper: var(--paper);
+  --color-sand: var(--sand);
+  --color-clay: var(--clay);
+  --color-muted: var(--muted);
+  --color-error: var(--error);
+  --color-error-surface: var(--error-surface);
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-lora);
+}
+
+body {
+  margin: 0;
+  background: var(--ivory);
+  color: var(--petrol);
+  font-family: var(--font-inter), sans-serif;
+  font-weight: 400;
+}
+
+:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.type-h1,
+.type-h1-wide,
+.type-h2,
+.type-h3,
+.type-feature-title,
+.type-article-title,
+.type-cta,
+.type-success,
+.type-wordmark,
+.type-footer-brand,
+.type-menu {
+  font-family: var(--font-lora), serif;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.type-h1 {
+  font-size: clamp(40px, calc(17.142857vw - 14.857143px), 52px);
+  line-height: clamp(45px, calc(20vw - 19px), 59px);
+}
+.type-h1-wide {
+  font-size: 48px;
+  line-height: 54px;
+}
+.type-h2,
+.type-cta {
+  font-size: clamp(34px, calc(5.714286vw + 15.714286px), 38px);
+  line-height: clamp(39px, calc(5.714286vw + 20.714286px), 43px);
+}
+.type-h3 {
+  font-size: 32px;
+  line-height: 36px;
+}
+.type-feature-title {
+  font-size: 32px;
+  line-height: 36px;
+}
+.type-article-title {
+  font-size: 26px;
+  line-height: 29px;
+}
+.type-success {
+  font-size: 36px;
+  line-height: 41px;
+}
+.type-body,
+.type-hero-body {
+  font-size: 18px;
+  line-height: 27px;
+}
+.type-nav {
+  font-size: 14px;
+  line-height: 21px;
+}
+.type-menu-trigger {
+  font-size: 14px;
+  line-height: 24px;
+}
+.type-button {
+  font-size: 14px;
+  line-height: 20px;
+}
+.type-label {
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 1px;
+}
+.type-caption {
+  font-size: 12px;
+  line-height: 18px;
+}
+.type-small {
+  font-size: 16px;
+  line-height: 24px;
+}
+.type-feature {
+  font-size: 16px;
+  line-height: 32px;
+}
+.type-field {
+  font-size: 16px;
+  line-height: 24px;
+}
+.type-help {
+  font-size: 13px;
+  line-height: 20px;
+}
+.type-wordmark {
+  font-size: 32px;
+  line-height: 36px;
+}
+.type-descriptor {
+  font-size: 9px;
+  line-height: 12px;
+}
+.type-footer-brand {
+  font-size: 48px;
+  line-height: 54px;
+}
+.type-menu {
+  font-family: var(--font-lora), serif;
+  font-weight: 400;
+  font-size: 40px;
+  line-height: 45px;
+}
+.type-menu-brand {
+  font-family: var(--font-lora), serif;
+  font-weight: 400;
+  font-size: 36px;
+  line-height: 41px;
+}
+
+@media (min-width: 768px) {
+  .type-h1 {
+    font-size: 64px;
+    line-height: 72px;
+  }
+  .type-h2,
+  .type-cta {
+    font-size: 44px;
+    line-height: 50px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .type-article-title {
+    font-size: 32px;
+    line-height: 36px;
+  }
+  .type-h1 {
+    font-size: clamp(64px, calc(4.326923vw + 19.692308px), 82px);
+    line-height: clamp(72px, calc(5.048077vw + 20.307692px), 93px);
+  }
+  .type-h1-wide {
+    font-size: 76px;
+    line-height: 86px;
+  }
+  .type-h2 {
+    font-size: 54px;
+    line-height: 61px;
+  }
+  .type-h3 {
+    font-size: 40px;
+    line-height: 45px;
+  }
+  .type-cta {
+    font-size: 62px;
+    line-height: 70px;
+  }
+  .type-hero-body {
+    font-size: 20px;
+    line-height: 30px;
+  }
+  .type-wordmark {
+    font-size: 40px;
+    line-height: 44px;
+  }
+}
+
+/* Section owns the repository scale expression. Eligibility is CSS-only and
+   approved internals use this guarded alias; padding and gaps remain unchanged. */
+[data-scale-2xl] {
+  --layout-scale: 1;
+}
+@media (min-width: 1024px) {
+  :root {
+    --site-header-height: 100px;
+  }
+}
+@media (min-width: 1440px) and (min-height: 720px) {
+  [data-scale-2xl] {
+    --layout-scale: var(--section-width-scale);
+  }
+  [data-scale-2xl] .type-h1 {
+    font-size: calc(82px * var(--layout-scale));
+    line-height: calc(93px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-h1-wide {
+    font-size: calc(76px * var(--layout-scale));
+    line-height: calc(86px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-h2 {
+    font-size: calc(54px * var(--layout-scale));
+    line-height: calc(61px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-h3 {
+    font-size: calc(40px * var(--layout-scale));
+    line-height: calc(45px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-feature-title {
+    font-size: calc(32px * var(--layout-scale));
+    line-height: calc(36px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-article-title {
+    font-size: calc(32px * var(--layout-scale));
+    line-height: calc(36px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-cta {
+    font-size: calc(62px * var(--layout-scale));
+    line-height: calc(70px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-body {
+    font-size: calc(18px * var(--layout-scale));
+    line-height: calc(27px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-hero-body {
+    font-size: calc(20px * var(--layout-scale));
+    line-height: calc(30px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-nav {
+    font-size: calc(14px * var(--layout-scale));
+    line-height: calc(21px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-button {
+    font-size: calc(14px * var(--layout-scale));
+    line-height: calc(20px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-label {
+    font-size: calc(12px * var(--layout-scale));
+    line-height: calc(18px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-caption {
+    font-size: calc(12px * var(--layout-scale));
+    line-height: calc(18px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-small {
+    font-size: calc(16px * var(--layout-scale));
+    line-height: calc(24px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-feature {
+    font-size: calc(16px * var(--layout-scale));
+    line-height: calc(32px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-wordmark {
+    font-size: calc(40px * var(--layout-scale));
+    line-height: calc(44px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-descriptor {
+    font-size: calc(9px * var(--layout-scale));
+    line-height: calc(12px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-footer-brand {
+    font-size: calc(48px * var(--layout-scale));
+    line-height: calc(54px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-label {
+    letter-spacing: calc(1px * var(--layout-scale));
+  }
+}
+
+.type-contact-aside {
+  font-family: var(--font-lora), serif;
+  font-weight: 400;
+  font-size: 32px;
+  line-height: 36px;
+}
+@media (min-width: 1024px) {
+  .type-contact-aside {
+    font-size: 42px;
+    line-height: 47px;
+  }
+}
+@media (min-width: 1440px) and (min-height: 720px) {
+  [data-scale-2xl] .type-contact-aside {
+    font-size: calc(42px * var(--layout-scale));
+    line-height: calc(47px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-success {
+    font-size: calc(36px * var(--layout-scale));
+    line-height: calc(41px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-field {
+    font-size: calc(16px * var(--layout-scale));
+    line-height: calc(24px * var(--layout-scale));
+  }
+  [data-scale-2xl] .type-help {
+    font-size: calc(13px * var(--layout-scale));
+    line-height: calc(20px * var(--layout-scale));
+  }
+}
+
+/* The parser arms this fixed surface only for eligible, unpainted Home entries. */
+#mare-intro {
+  display: none;
+}
+#mare-intro[data-active] {
+  display: flex;
+}
+:root[data-mare-transition]::view-transition-group(root),
+:root[data-mare-transition]::view-transition-old(root),
+:root[data-mare-transition]::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+:root[data-mare-transition]::view-transition-old(root) {
+  z-index: 1;
+}
+:root[data-mare-transition]::view-transition-new(root) {
+  z-index: 2;
+}
+:root[data-mare-transition]::view-transition {
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  #mare-intro[data-active] {
+    display: none;
+  }
+}
+
+/* The first visible brand frame already matches its animation's starting frame. */
+#mare-intro [data-intro-wordmark] {
+  opacity: 0.4;
+  transform: translateY(6px);
+}
+@media (max-width: 1023px), (max-height: 719px) {
+  #mare-intro [data-intro-wordmark] {
+    transform: translateY(4px);
+  }
+}
